@@ -1,0 +1,64 @@
+<mxfile host="65bd71144e">
+    <diagram name="Multi-Tenant Kubernetes Architecture" id="0">
+        <mxGraphModel dx="896" dy="503" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="2" value="Kubernetes Cluster" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="20" width="850" height="700" as="geometry"/>
+                </mxCell>
+                <mxCell id="3" value="Main Namespace (maindomain.com)" style="swimlane;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontColor=#000000;" parent="2" vertex="1">
+                    <mxGeometry x="50" y="40" width="350" height="250" as="geometry"/>
+                </mxCell>
+                <mxCell id="4" value="Frontend" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontColor=#000000;" parent="3" vertex="1">
+                    <mxGeometry x="40" y="40" width="100" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="5" value="API" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontColor=#000000;" parent="3" vertex="1">
+                    <mxGeometry x="40" y="100" width="100" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="6" value="Database" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontColor=#000000;" parent="3" vertex="1">
+                    <mxGeometry x="40" y="160" width="100" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="7" value="Tenant Namespace (tenant1.maindomain.com)" style="swimlane;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontColor=#000000;" parent="2" vertex="1">
+                    <mxGeometry x="450" y="40" width="350" height="250" as="geometry"/>
+                </mxCell>
+                <mxCell id="8" value="Frontend" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;fontColor=#000000;" parent="7" vertex="1">
+                    <mxGeometry x="40" y="40" width="100" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="9" value="API" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;fontColor=#000000;" parent="7" vertex="1">
+                    <mxGeometry x="40" y="100" width="100" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="10" value="Database" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;fontColor=#000000;" parent="7" vertex="1">
+                    <mxGeometry x="40" y="160" width="100" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="11" value="Tenant Namespace (tenant2.maindomain.com)" style="swimlane;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontColor=#000000;" parent="2" vertex="1">
+                    <mxGeometry x="50" y="310" width="350" height="250" as="geometry"/>
+                </mxCell>
+                <mxCell id="12" value="Frontend" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontColor=#000000;" parent="11" vertex="1">
+                    <mxGeometry x="40" y="40" width="100" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="13" value="API" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontColor=#000000;" parent="11" vertex="1">
+                    <mxGeometry x="40" y="100" width="100" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="14" value="Database" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontColor=#000000;" parent="11" vertex="1">
+                    <mxGeometry x="40" y="160" width="100" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="15" value="Tenant Namespace (tenant3.maindomain.com)" style="swimlane;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontColor=#000000;" parent="2" vertex="1">
+                    <mxGeometry x="450" y="310" width="350" height="250" as="geometry"/>
+                </mxCell>
+                <mxCell id="16" value="Frontend" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;fontColor=#000000;" parent="15" vertex="1">
+                    <mxGeometry x="40" y="40" width="100" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="17" value="API" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;fontColor=#000000;" parent="15" vertex="1">
+                    <mxGeometry x="40" y="100" width="100" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="18" value="Database" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;fontColor=#000000;" parent="15" vertex="1">
+                    <mxGeometry x="40" y="160" width="100" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="19" value="User Flow: Access maindomain.com for API to create namespaces and subdomains" style="text;strokeColor=none;fillColor=none;whiteSpace=wrap;html=1;fontColor=#000000;" parent="2" vertex="1">
+                    <mxGeometry x="130" y="570" width="480" height="60" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

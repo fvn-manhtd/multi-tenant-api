@@ -2,6 +2,9 @@
 
 This repository contains a FastAPI application with multi-tenant support, deployed using Kubernetes.
 
+## Kubernetes Multi-Tenancy Diagram
+![Kubernetes Multi-Tenancy Diagram](kubernetes_multi_tenancy_architecture.svg)
+
 ## Prerequisites
 
 - Docker
