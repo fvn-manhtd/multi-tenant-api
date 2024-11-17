@@ -1,19 +1,23 @@
 import os
-import base64
 import logging
-import subprocess
-from typing import Union
 
-from fastapi import FastAPI, Request, HTTPException
-from pydantic import BaseModel
-from kubernetes import client, config
-from kubernetes.client.rest import ApiException
-from kubernetes.config.config_exception import ConfigException
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, Request, HTTPException # type: ignore
+from pydantic import BaseModel # type: ignore
+from kubernetes import client, config # type: ignore
+from kubernetes.client.rest import ApiException # type: ignore
+from kubernetes.config.config_exception import ConfigException # type: ignore
+from fastapi.middleware.cors import CORSMiddleware # type: ignore
+import dns.resolver # type: ignore
+import dns.update # type: ignore
+import dns.query # type: ignore
+from dotenv import load_dotenv # type: ignore
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
+
+# Load environment variables from .env file
+load_dotenv()
 
 app = FastAPI()
 
@@ -53,138 +57,153 @@ def load_kubernetes_config():
         logger.error(f"Failed to load Kubernetes config: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to load Kubernetes config: {str(e)}")
 
+
 def create_yaml_files(tenant: Tenant):
-    namespace = tenant.name
+    # Implement the logic to create YAML files for the tenant's resources
+    backend_deployment = client.V1Deployment(
+        metadata=client.V1ObjectMeta(name="backend"),
+        spec=client.V1DeploymentSpec(
+            replicas=2,
+            selector=client.V1LabelSelector(
+                match_labels={"app": "backend"}
+            ),
+            template=client.V1PodTemplateSpec(
+                metadata=client.V1ObjectMeta(labels={"app": "backend"}),
+                spec=client.V1PodSpec(
+                    containers=[
+                        client.V1Container(
+                            name="backend",
+                            image="backend-image",
+                            ports=[client.V1ContainerPort(container_port=80)]
+                        )
+                    ]
+                )
+            )
+        )
+    )
 
-    backend_deployment_yaml = f"""
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: backend
-  namespace: {namespace}
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: backend
-  template:
-    metadata:
-      labels:
-        app: backend
-    spec:
-      containers:
-      - name: backend
-        image: fastapi-backend
-        ports:
-        - containerPort: 8000
-"""
+    backend_service = client.V1Service(
+        metadata=client.V1ObjectMeta(name="backend"),
+        spec=client.V1ServiceSpec(
+            selector={"app": "backend"},
+            ports=[client.V1ServicePort(port=80, target_port=80)]
+        )
+    )
 
-    backend_service_yaml = f"""
-apiVersion: v1
-kind: Service
-metadata:
-  name: backend
-  namespace: {namespace}
-spec:
-  selector:
-    app: backend
-  ports:
-  - protocol: TCP
-    port: 80
-    targetPort: 8000
-"""
+    frontend_deployment = client.V1Deployment(
+        metadata=client.V1ObjectMeta(name="frontend"),
+        spec=client.V1DeploymentSpec(
+            replicas=2,
+            selector=client.V1LabelSelector(
+                match_labels={"app": "frontend"}
+            ),
+            template=client.V1PodTemplateSpec(
+                metadata=client.V1ObjectMeta(labels={"app": "frontend"}),
+                spec=client.V1PodSpec(
+                    containers=[
+                        client.V1Container(
+                            name="frontend",
+                            image="frontend-image",
+                            ports=[client.V1ContainerPort(container_port=80)]
+                        )
+                    ]
+                )
+            )
+        )
+    )
 
-    frontend_deployment_yaml = f"""
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: frontend
-  namespace: {namespace}
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: frontend
-  template:
-    metadata:
-      labels:
-        app: frontend
-    spec:
-      containers:
-      - name: frontend
-        image: react-frontend
-        ports:
-        - containerPort: 3000
-"""
+    frontend_service = client.V1Service(
+        metadata=client.V1ObjectMeta(name="frontend"),
+        spec=client.V1ServiceSpec(
+            selector={"app": "frontend"},
+            ports=[client.V1ServicePort(port=80, target_port=80)]
+        )
+    )
 
-    frontend_service_yaml = f"""
-apiVersion: v1
-kind: Service
-metadata:
-  name: frontend
-  namespace: {namespace}
-spec:
-  selector:
-    app: frontend
-  ports:
-  - protocol: TCP
-    port: 80
-    targetPort: 3000
-"""
+    ingress = client.V1Ingress(
+        metadata=client.V1ObjectMeta(
+            name="tenant-ingress",
+            namespace=tenant.name,
+            annotations={
+                "nginx.ingress.kubernetes.io/rewrite-target": "/",
+            },
+        ),
+        spec=client.V1IngressSpec(
+            rules=[
+                client.V1IngressRule(
+                    host=tenant.domain,
+                    http=client.V1HTTPIngressRuleValue(
+                        paths=[
+                            client.V1HTTPIngressPath(
+                                path="/",
+                                path_type="Prefix",
+                                backend=client.V1IngressBackend(
+                                    service=client.V1IngressServiceBackend(
+                                        name="frontend",
+                                        port=client.V1ServiceBackendPort(number=80)
+                                    )
+                                )
+                            )
+                        ]
+                    )
+                ),
+                client.V1IngressRule(
+                    host=tenant.api_domain,
+                    http=client.V1HTTPIngressRuleValue(
+                        paths=[
+                            client.V1HTTPIngressPath(
+                                path="/",
+                                path_type="Prefix",
+                                backend=client.V1IngressBackend(
+                                    service=client.V1IngressServiceBackend(
+                                        name="backend",
+                                        port=client.V1ServiceBackendPort(number=80)
+                                    )
+                                )
+                            )
+                        ]
+                    )
+                )
+            ]
+        )
+    )
 
-    ingress_yaml = f"""
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: tenant-ingress
-  namespace: {namespace}
-  annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
-spec:
-  rules:
-  - host: {tenant.domain}
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: frontend
-            port:
-              number: 80
-  - host: {tenant.api_domain}
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: backend
-            port:
-              number: 80
-"""
+    return backend_deployment, backend_service, frontend_deployment, frontend_service, ingress
 
-    os.makedirs(f"./_kube/{namespace}", exist_ok=True)
-    with open(f"./_kube/{namespace}/backend-deployment.yaml", "w") as f:
-        f.write(backend_deployment_yaml)
-    with open(f"./_kube/{namespace}/backend-service.yaml", "w") as f:
-        f.write(backend_service_yaml)
-    with open(f"./_kube/{namespace}/frontend-deployment.yaml", "w") as f:
-        f.write(frontend_deployment_yaml)
-    with open(f"./_kube/{namespace}/frontend-service.yaml", "w") as f:
-        f.write(frontend_service_yaml)
-    with open(f"./_kube/{namespace}/ingress.yaml", "w") as f:
-        f.write(ingress_yaml)
+def apply_yaml_files(namespace: str, backend_deployment, backend_service, frontend_deployment, frontend_service, ingress):
+    load_kubernetes_config()
+    k8s_apps = client.AppsV1Api()
+    k8s_core = client.CoreV1Api()
+    k8s_networking = client.NetworkingV1Api()
 
-def apply_yaml_files(namespace: str):
     try:
-        subprocess.run(["kubectl", "apply", "-f", f"./_kube/{namespace}/backend-deployment.yaml"], check=True)
-        subprocess.run(["kubectl", "apply", "-f", f"./_kube/{namespace}/backend-service.yaml"], check=True)
-        subprocess.run(["kubectl", "apply", "-f", f"./_kube/{namespace}/frontend-deployment.yaml"], check=True)
-        subprocess.run(["kubectl", "apply", "-f", f"./_kube/{namespace}/frontend-service.yaml"], check=True)
-        subprocess.run(["kubectl", "apply", "-f", f"./_kube/{namespace}/ingress.yaml"], check=True)
-    except subprocess.CalledProcessError as e:
-        raise HTTPException(status_code=500, detail=f"Error applying YAML files: {e}")
+        k8s_apps.create_namespaced_deployment(namespace, backend_deployment)
+        k8s_core.create_namespaced_service(namespace, backend_service)
+    except ApiException as e:
+        raise HTTPException(status_code=500, detail=f"Backend error: {e}")
+
+    try:
+        k8s_apps.create_namespaced_deployment(namespace, frontend_deployment)
+        k8s_core.create_namespaced_service(namespace, frontend_service)
+    except ApiException as e:
+        raise HTTPException(status_code=500, detail=f"Frontend error: {e}")
+
+    try:
+        k8s_networking.create_namespaced_ingress(namespace, ingress)
+    except ApiException as e:
+        raise HTTPException(status_code=500, detail=f"Ingress error: {e}")
+
+def update_dns_records(tenant: Tenant):
+    # Replace with your DNS server and zone details
+    dns_server = "your-dns-server"
+    dns_zone = "your-dns-zone"
+
+    update = dns.update.Update(dns_zone)
+    update.replace(tenant.domain, 300, 'A', 'your-ingress-controller-ip')
+    update.replace(tenant.api_domain, 300, 'A', 'your-ingress-controller-ip')
+
+    response = dns.query.tcp(update, dns_server)
+    logger.info(f"DNS update response: {response}")
 
 @app.post("/create-tenant/")
 async def create_tenant(tenant: Tenant):
@@ -195,142 +214,34 @@ async def create_tenant(tenant: Tenant):
 
     # Create instances of the Kubernetes API clients
     k8s_core = client.CoreV1Api()
-    k8s_apps = client.AppsV1Api()
-    k8s_networking = client.NetworkingV1Api()
 
-    # Check if the api_domain already exists in the namespace
+    # Check if the namespace already exists
     try:
-        ingresses = k8s_networking.list_namespaced_ingress(namespace=namespace)
-        for ingress in ingresses.items:
-            for rule in ingress.spec.rules:
-                if rule.host == tenant.api_domain:
-                    raise HTTPException(status_code=400, detail=f"API domain {tenant.api_domain} already exists in namespace {namespace}")
+        k8s_core.read_namespace(name=namespace)
+        raise HTTPException(status_code=400, detail=f"Namespace {namespace} already exists")
     except ApiException as e:
-        raise HTTPException(status_code=500, detail=f"Error checking ingresses: {e}")
+        if e.status != 404:
+            raise HTTPException(status_code=500, detail=f"Failed to check namespace: {str(e)}")
 
-    # Step 1: Create Namespace
+    # Create the namespace
+    namespace_body = client.V1Namespace(metadata=client.V1ObjectMeta(name=namespace))
     try:
-        ns = client.V1Namespace(metadata=client.V1ObjectMeta(name=namespace))
-        k8s_core.create_namespace(ns)
+        k8s_core.create_namespace(body=namespace_body)
     except ApiException as e:
         if e.status != 409:  # Ignore if namespace already exists
             raise HTTPException(status_code=500, detail=f"Namespace error: {e}")
 
-    # Step 2: Create Backend Deployment and Service
-    backend_deployment = client.V1Deployment(
-        metadata=client.V1ObjectMeta(name="backend", namespace=namespace),
-        spec=client.V1DeploymentSpec(
-            replicas=2,
-            selector={"matchLabels": {"app": "backend"}},
-            template=client.V1PodTemplateSpec(
-                metadata={"labels": {"app": "backend"}},
-                spec=client.V1PodSpec(containers=[
-                    client.V1Container(
-                        name="backend",
-                        image="your-docker-repo/fastapi-backend:latest",
-                        ports=[client.V1ContainerPort(container_port=8000)],
-                    )
-                ]),
-            ),
-        ),
-    )
-    backend_service = client.V1Service(
-        metadata=client.V1ObjectMeta(name="backend", namespace=namespace),
-        spec=client.V1ServiceSpec(
-            selector={"app": "backend"},
-            ports=[client.V1ServicePort(protocol="TCP", port=80, target_port=8000)],
-        ),
-    )
+    # Create YAML files for the tenant's resources
+    backend_deployment, backend_service, frontend_deployment, frontend_service, ingress = create_yaml_files(tenant)
 
-    try:
-        k8s_apps.create_namespaced_deployment(namespace, backend_deployment)
-        k8s_core.create_namespaced_service(namespace, backend_service)
-    except ApiException as e:
-        raise HTTPException(status_code=500, detail=f"Backend error: {e}")
+    # Apply the generated YAML files
+    apply_yaml_files(namespace, backend_deployment, backend_service, frontend_deployment, frontend_service, ingress)
+    
+    # Update DNS records only if not in development environment
+    if os.getenv('ENVIRONMENT') != 'development':
+        update_dns_records(tenant)
 
-    # Step 3: Create Frontend Deployment and Service
-    frontend_deployment = client.V1Deployment(
-        metadata=client.V1ObjectMeta(name="frontend", namespace=namespace),
-        spec=client.V1DeploymentSpec(
-            replicas=2,
-            selector={"matchLabels": {"app": "frontend"}},
-            template=client.V1PodTemplateSpec(
-                metadata={"labels": {"app": "frontend"}},
-                spec=client.V1PodSpec(containers=[
-                    client.V1Container(
-                        name="frontend",
-                        image="your-docker-repo/react-frontend:latest",
-                        ports=[client.V1ContainerPort(container_port=3000)],
-                    )
-                ]),
-            ),
-        ),
-    )
-    frontend_service = client.V1Service(
-        metadata=client.V1ObjectMeta(name="frontend", namespace=namespace),
-        spec=client.V1ServiceSpec(
-            selector={"app": "frontend"},
-            ports=[client.V1ServicePort(protocol="TCP", port=80, target_port=3000)],
-        ),
-    )
-
-    try:
-        k8s_apps.create_namespaced_deployment(namespace, frontend_deployment)
-        k8s_core.create_namespaced_service(namespace, frontend_service)
-    except ApiException as e:
-        raise HTTPException(status_code=500, detail=f"Frontend error: {e}")
-
-    # Step 4: Create Ingress for Frontend and Backend
-    ingress = client.V1Ingress(
-        metadata=client.V1ObjectMeta(
-            name="tenant-ingress",
-            namespace=namespace,
-            annotations={
-                "nginx.ingress.kubernetes.io/rewrite-target": "/",
-            },
-        ),
-        spec=client.V1IngressSpec(
-            rules=[
-                client.V1IngressRule(
-                    host=tenant.domain,
-                    http=client.V1HTTPIngressRuleValue(paths=[
-                        client.V1HTTPIngressPath(
-                            path="/",
-                            path_type="Prefix",
-                            backend=client.V1IngressBackend(
-                                service=client.V1IngressServiceBackend(
-                                    name="frontend",
-                                    port=client.V1ServiceBackendPort(number=80),
-                                )
-                            ),
-                        )
-                    ]),
-                ),
-                client.V1IngressRule(
-                    host=tenant.api_domain,
-                    http=client.V1HTTPIngressRuleValue(paths=[
-                        client.V1HTTPIngressPath(
-                            path="/",
-                            path_type="Prefix",
-                            backend=client.V1IngressBackend(
-                                service=client.V1IngressServiceBackend(
-                                    name="backend",
-                                    port=client.V1ServiceBackendPort(number=80),
-                                )
-                            ),
-                        )
-                    ]),
-                ),
-            ]
-        ),
-    )
-
-    try:
-        k8s_networking.create_namespaced_ingress(namespace, ingress)
-    except ApiException as e:
-        raise HTTPException(status_code=500, detail=f"Ingress error: {e}")
-
-    return {"message": f"Tenant '{tenant.name}' successfully created with domains {tenant.domain} and {tenant.api_domain}."}
+    return {"message": f"Tenant {tenant.name} created successfully"}
 
 @app.get("/list-namespaces")
 async def list_namespaces():
