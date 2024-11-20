@@ -2,7 +2,7 @@ import os
 import logging
 
 from fastapi import FastAPI, Request, HTTPException # type: ignore
-from pydantic import BaseModel # type: ignore
+from pydantic import BaseModel, validator # type: ignore
 from kubernetes import client, config # type: ignore
 from kubernetes.client.rest import ApiException # type: ignore
 from kubernetes.config.config_exception import ConfigException # type: ignore
@@ -11,6 +11,7 @@ import dns.resolver # type: ignore
 import dns.update # type: ignore
 import dns.query # type: ignore
 from dotenv import load_dotenv # type: ignore
+from sqlalchemy import create_engine, text # type: ignore
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -23,43 +24,38 @@ app = FastAPI()
 
 TENANTS = {}
 
+
 # Define tenant model
 class Tenant(BaseModel):
     name: str
-    domain: str
-    api_domain: str
 
 def load_kubernetes_config():
     try:
         if os.getenv('KUBERNETES_SERVICE_HOST'):
-            # Running inside a Kubernetes cluster
-            logger.debug("Loading Kubernetes configuration from within the cluster")
             config.load_incluster_config()
         else:
-            # Running outside a Kubernetes cluster
-            kubeconfig_path = os.getenv('KUBECONFIG', '~/.kube/config')
-            logger.debug(f"KUBECONFIG environment variable: {kubeconfig_path}")
-
-            # Check if the kube-config file exists and log its contents
-            kubeconfig_path = os.path.expanduser(kubeconfig_path)
-            if os.path.exists(kubeconfig_path):
-                with open(kubeconfig_path, 'r') as f:
-                    logger.debug(f"Kube-config file contents:\n{f.read()}")
-            else:
-                logger.error(f"Kube-config file not found at: {kubeconfig_path}")
-
-            # Load Kubernetes configuration from kubeconfig file
-            logger.debug("Loading Kubernetes configuration from kubeconfig file")
-            config.load_kube_config(config_file=kubeconfig_path)
-        
-        logger.debug("Kubernetes configuration loaded successfully")
-    except ConfigException as e:
+            config.load_kube_config()
+    except Exception as e:
         logger.error(f"Failed to load Kubernetes config: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to load Kubernetes config: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to load Kubernetes config")
+
+def create_database(tenant_name: str):
+    db_host = os.getenv('DB_HOST', 'localhost')
+    db_user = os.getenv('DB_USER', 'postgres')
+    db_password = os.getenv('DB_PASSWORD', 'password')
+    db_port = os.getenv('DB_PORT', '5432')
+
+    engine = create_engine(f'postgresql://{db_user}:{db_password}@{db_host}:{db_port}/postgres')
+
+    with engine.connect() as connection:
+        connection.execute(text(f"CREATE DATABASE {tenant_name}_db"))
 
 
 def create_yaml_files(tenant: Tenant):
-    # Implement the logic to create YAML files for the tenant's resources
+    main_domain = os.getenv('MAIN_DOMAIN', 'central.local')
+    domain = f"{tenant.name}.{main_domain}"
+    api_domain = f"api.{tenant.name}.{main_domain}"
+
     backend_deployment = client.V1Deployment(
         metadata=client.V1ObjectMeta(name="backend"),
         spec=client.V1DeploymentSpec(
@@ -131,7 +127,7 @@ def create_yaml_files(tenant: Tenant):
         spec=client.V1IngressSpec(
             rules=[
                 client.V1IngressRule(
-                    host=tenant.domain,
+                    host=domain,
                     http=client.V1HTTPIngressRuleValue(
                         paths=[
                             client.V1HTTPIngressPath(
@@ -148,7 +144,7 @@ def create_yaml_files(tenant: Tenant):
                     )
                 ),
                 client.V1IngressRule(
-                    host=tenant.api_domain,
+                    host=api_domain,
                     http=client.V1HTTPIngressRuleValue(
                         paths=[
                             client.V1HTTPIngressPath(
@@ -194,13 +190,17 @@ def apply_yaml_files(namespace: str, backend_deployment, backend_service, fronte
         raise HTTPException(status_code=500, detail=f"Ingress error: {e}")
 
 def update_dns_records(tenant: Tenant):
+    main_domain = os.getenv('MAIN_DOMAIN', 'central.local')
+    domain = f"{tenant.name}.{main_domain}"
+    api_domain = f"api.{tenant.name}.{main_domain}"
+
     # Replace with your DNS server and zone details
     dns_server = "your-dns-server"
     dns_zone = "your-dns-zone"
 
     update = dns.update.Update(dns_zone)
-    update.replace(tenant.domain, 300, 'A', 'your-ingress-controller-ip')
-    update.replace(tenant.api_domain, 300, 'A', 'your-ingress-controller-ip')
+    update.replace(domain, 300, 'A', 'your-ingress-controller-ip')
+    update.replace(api_domain, 300, 'A', 'your-ingress-controller-ip')
 
     response = dns.query.tcp(update, dns_server)
     logger.info(f"DNS update response: {response}")
@@ -231,18 +231,20 @@ async def create_tenant(tenant: Tenant):
         if e.status != 409:  # Ignore if namespace already exists
             raise HTTPException(status_code=500, detail=f"Namespace error: {e}")
 
+    # Create the database for the tenant
+    create_database(tenant.name)
+
     # Create YAML files for the tenant's resources
     backend_deployment, backend_service, frontend_deployment, frontend_service, ingress = create_yaml_files(tenant)
 
     # Apply the generated YAML files
     apply_yaml_files(namespace, backend_deployment, backend_service, frontend_deployment, frontend_service, ingress)
-    
+
     # Update DNS records only if not in development environment
     if os.getenv('ENVIRONMENT') != 'development':
         update_dns_records(tenant)
 
     return {"message": f"Tenant {tenant.name} created successfully"}
-
 @app.get("/list-namespaces")
 async def list_namespaces():
     try:
@@ -257,13 +259,9 @@ async def list_namespaces():
         namespace_list = []
         for namespace in namespaces.items:
             namespace_name = namespace.metadata.name
-            domain = f"{namespace_name}.central.local"
-            api_domain = f"api.{namespace_name}.central.local"
             namespace_info = {
                 "name": namespace_name,
-                "labels": namespace.metadata.labels,
-                "domain": domain,
-                "api_domain": api_domain
+                "labels": namespace.metadata.labels
             }
             namespace_list.append(namespace_info)
         
