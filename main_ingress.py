@@ -99,7 +99,8 @@ def create_yaml_files(tenant: Tenant):
                     containers=[
                         client.V1Container(
                             name="frontend",
-                            image="frontend-image",
+                            image="react-frontend",
+                            image_pull_policy="Never", # this option is only pull the image from local
                             ports=[client.V1ContainerPort(container_port=80)]
                         )
                     ]
@@ -112,7 +113,7 @@ def create_yaml_files(tenant: Tenant):
         metadata=client.V1ObjectMeta(name="frontend"),
         spec=client.V1ServiceSpec(
             selector={"app": "frontend"},
-            ports=[client.V1ServicePort(port=80, target_port=80)]
+            ports=[client.V1ServicePort(port=80, target_port=3000)]
         )
     )
 
