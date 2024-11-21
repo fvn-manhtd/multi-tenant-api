@@ -122,14 +122,14 @@ kubectl rollout restart deployment/frontend -n tenant1
 ### Fallback Solution: Port Forwarding
 
 ```sh
-kubectl port-forward svc/frontend 8080:80 -n tenant1
+kubectl port-forward service/frontend 8080:80 -n tenant1
 
-kubectl port-forward svc/backend 8081:80 -n tenant1
+kubectl port-forward service/backend 8081:80 -n tenant1
 ```
 
 ### Access the Frontend Application
-Open your browser and navigate to http://tenant1.localhost.local:8080 to see your frontend application running.
-Open your browser and navigate to http://api.tenant1.localhost.local:8081 to see your frontend application running.
+Open your browser and navigate to http://tenant1.central.local:8080 to see your frontend application running.
+Open your browser and navigate to http://api.tenant1.central.local:8081 to see your frontend application running.
 
 
 
